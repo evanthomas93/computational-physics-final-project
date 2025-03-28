@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 # store psi as Nx1 array, full solution stored as NxM (N positions, M timesteps)
 m = 1
+hBar = 1.055e-34 # Reduced Planck's Constant in J * s
 omega = 1
 hbar = 1
 C_n = [1/np.sqrt(3), 1/np.sqrt(3), 1/np.sqrt(3)] # initial values of first three eigenstates
@@ -26,15 +27,27 @@ def crank_nicholson_step(psi, dpsi_dt_function, dt):
     pass
     # might need a separate version for damped and undamped
 
-# V(x) of harmonic potential
-def harmonic_potential(x):
-    pass
-
 def dpsi_dt_undamped(psi, x, t):
-    pass
+    # Second derivative of the wavefunction psi
+    d2psi_dx2 = np.zeros_like(psi)
+    for i in range(1, len(x) - 1):  # Exclude boundaries for derivative calculation
+        d2psi_dx2[i] = (psi[i+1] - 2*psi[i] + psi[i-1]) / (h**2)
     
+    dpsidt = (-1j / hBar) * (- (hBar**2 / (2 * m)) * d2psi_dx2 + (0.5 * m * omega**2 * x**2) * psi)
+
+    return dpsidt
+
 def dpsi_dt_damped(psi, x, t, alpha):
-    pass
+    d2psi_dx2 = np.zeros_like(psi)
+    for i in range(1, len(x) - 1):  
+        d2psi_dx2[i] = (psi[i+1] - 2*psi[i] + psi[i-1]) / (h**2)
+    
+    kinetic_term = (- (hBar**2 / (2 * m)) * d2psi_dx2) * np.exp(-alpha * t) # The kinetic term of the full derivative
+    potential_term = (0.5 * m * omega**2 * x**2 * psi) * np.exp(alpha * t) # The potential term of the full derivative
+
+    dpsidt = (-1j / hBar) * (kinetic_term + potential_term)
+
+    return dpsidt
 
 #def time_dependent_solution():
 
