@@ -23,8 +23,17 @@ def generate_initial_state():
 
 def euler_step(psi, dpsi_dt_function, dt):
     pass
+
 def runge_kutta_step(psi, dpsi_dt_function, dt):
-    pass
+    k1 = dt * dpsi_dt_function(psi, x, t)
+    k2 = dt * dpsi_dt_function((psi + (0.5 * k1)), x, (t + (0.5 * dt)))
+    k3 = dt * dpsi_dt_function((psi + (0.5 * k2)), x, (t + (0.5 * dt)))
+    k4 = dt * dpsi_dt_function((psi + k3), (t + dt))
+
+    psi_next = psi + ((k1 + (2 * k2) + (2 * k3) + k4) / 6)
+
+    return psi_next
+
 def crank_nicholson_step(psi, dpsi_dt_function, dt):
     pass
     # might need a separate version for damped and undamped
