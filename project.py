@@ -26,9 +26,9 @@ def euler_step(psi, dpsi_dt_function, dt):
 
 def runge_kutta_step(psi, dpsi_dt_function, dt):
     k1 = dt * dpsi_dt_function(psi, x, t)
-    k2 = dt * dpsi_dt_function((psi + (0.5 * k1)), x, (t + (0.5 * dt)))
-    k3 = dt * dpsi_dt_function((psi + (0.5 * k2)), x, (t + (0.5 * dt)))
-    k4 = dt * dpsi_dt_function((psi + k3), (t + dt))
+    k2 = dt * dpsi_dt_function((psi + (0.5 * k1)), x_vec, (t + (0.5 * dt)))
+    k3 = dt * dpsi_dt_function((psi + (0.5 * k2)), x_vec, (t + (0.5 * dt)))
+    k4 = dt * dpsi_dt_function((psi + k3), x_vec, (t + dt))
 
     psi_next = psi + ((k1 + (2 * k2) + (2 * k3) + k4) / 6)
 
