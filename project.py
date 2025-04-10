@@ -8,8 +8,8 @@ omega = 1
 C_n = [1/np.sqrt(3), 1/np.sqrt(3), 1/np.sqrt(3)] # initial values of first three eigenstates
 average_n = (np.dot(C_n,np.arange(1,4)))/3.0 # average energy level, used to get classical turning point 
 N = 201
-M = 3000
-T = 3*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
+M = 1000
+T = 1.22*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
 x_classical_turning_point = np.sqrt((2*average_n+1)*(hBar/(m*omega)))
 x_max = x_classical_turning_point*5.0
 x_vec = np.linspace(-x_max, x_max, N)
@@ -59,6 +59,24 @@ def dpsi_dt_damped(psi, x, t, alpha):
 
     return dpsidt
 
+def rms_error(P1, P2):
+    error = np.zeros(M)
+    Delta_P = P1 - P2
+    for i in range(M):
+        error[i] = np.sqrt(np.sum( (Delta_P[:,i])**2 ))
+    return error
+
+def expected_position(psi):
+    x_bar = np.zeros(M)
+    a = x_vec[0]
+    b = x_vec[-1]
+    k = np.arange(1,)
+    for i in range(M):
+        f = np.abs(psi[:,i])**2*np.transpose(x_vec)
+        psi_i = psi[:,i]
+        x_bar[i] = h/3*( f[0]+f[-1]+4*np.sum(f[1:-1:2])+2*np.sum(f[2:-2:2]) )
+    return x_bar
+
 #def time_dependent_solution():
 def E_n(n):
     return (n+0.5)*hBar*omega
@@ -71,13 +89,14 @@ def eigenstate_solution():
         psi[:,i] += np.exp(-1.0j*E_n(2)*t/hBar)*C_n[2]*(m*omega/4/np.pi/hBar)**0.25*(2*m*omega/hBar*x_vec**2.0-1)*np.exp(-m*omega*x_vec**2.0/2/hBar)
     return psi # N x M for N points, M timesteps
 
+print("Computing Undamped Exact Solution ...")
 psi_eigenstates = eigenstate_solution()
 
+print("Computing Undamped Numerical Solutions ...")
 psi_undamped_euler = np.zeros_like(psi_eigenstates, np.complex128)
 psi_undamped_euler[:,0] = psi_eigenstates[:,0]
 psi_undamped_rk4 = psi_undamped_euler.copy()
 for i in range(M):
-    print(i)
     if i > 0:
         psi_undamped_euler[0,i-1] = 0.0
         psi_undamped_euler[-1,i-1] = 0.0
@@ -85,15 +104,25 @@ for i in range(M):
         psi_undamped_rk4[-1,i-1] = 0.0
         psi_undamped_euler[:,i] = euler_step(psi_undamped_euler[:,i-1], dpsi_dt_undamped, t_vec[i], dt)
         psi_undamped_rk4[:,i] = runge_kutta_step(psi_undamped_rk4[:,i-1], dpsi_dt_undamped, t_vec[i], dt)
-    #plt.plot(np.real(psi_undamped_euler[:,i]))
-    #plt.plot(np.imag(psi_undamped_euler[:,i]))
-    #plt.plot(np.abs(psi_undamped_rk4[:,i])**2)
-    #plt.xlabel("x (m)")
-    #plt.ylabel("$|\Psi|^2$")
-    #plt.ylim(0, 8e16)
-    #plt.show(block=False)
-    #plt.savefig("euler/{}.png".format(i))
-    #plt.clf()
+P_eigenstates = np.abs(psi_eigenstates)**2
+P_undamped_euler = np.abs(psi_undamped_euler)**2
+P_undamped_rk4 = np.abs(psi_undamped_rk4)**2
+error_undamped_euler = rms_error(P_eigenstates, P_undamped_euler)
+error_undamped_rk4 = rms_error(P_eigenstates, P_undamped_rk4)
+x_bar_eigenstates = expected_position(psi_eigenstates)
+x_bar_euler = expected_position(psi_undamped_euler)
+x_bar_rk4 = expected_position(psi_undamped_rk4)
+
+for i in range(M):
+    break
+    print(i)
+    plt.cla()
+    plt.plot(P_eigenstates[:,i],"k")
+    plt.plot(P_undamped_euler[:,i],"b")
+    plt.plot(P_undamped_rk4[:,i],"r")
+    plt.show(block=False)
+    plt.ylim(0,10e16)
+    plt.savefig("undamped/{}.png".format(i))
 
 # solve time dependent equation for all three timestepping methods
 # compare to eigenstate solution
