@@ -8,10 +8,10 @@ omega = 1
 C_n = [1/np.sqrt(3), 1/np.sqrt(3), 1/np.sqrt(3)] # initial values of first three eigenstates
 average_n = (np.dot(C_n,np.arange(1,4)))/3.0 # average energy level, used to get classical turning point 
 N = 201
-M = 3000
-T = 3*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
+M = 10000
+T = 10*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
 x_classical_turning_point = np.sqrt((2*average_n+1)*(hBar/(m*omega)))
-x_max = x_classical_turning_point*5.0
+x_max = x_classical_turning_point*3.0
 x_vec = np.linspace(-x_max, x_max, N)
 t_vec = np.linspace(0,T,M)
 dt = t_vec[1]-t_vec[0]
@@ -41,8 +41,9 @@ def crank_nicholson_step(psi, dpsi_dt_function, dt):
 def dpsi_dt_undamped(psi, x, t):
     # Second derivative of the wavefunction psi
     d2psi_dx2 = np.zeros_like(psi)
-    for i in range(1, len(x) - 1):  # Exclude boundaries for derivative calculation
-        d2psi_dx2[i] = (psi[i+1] - 2*psi[i] + psi[i-1]) / (h**2)
+    #for i in range(1, len(x) - 1):  # Exclude boundaries for derivative calculation
+    #    d2psi_dx2[i] = (psi[i+1] - 2*psi[i] + psi[i-1]) / (h**2)
+    d2psi_dx2[1:-2] = (psi[0:-3]+psi[2:-1]-2*psi[1:-2])/(h**2)
     
     dpsidt = (-1j / hBar) * (- (hBar**2 / (2 * m)) * d2psi_dx2 + (0.5 * m * omega**2 * x**2) * psi)
 
@@ -50,8 +51,9 @@ def dpsi_dt_undamped(psi, x, t):
 
 def dpsi_dt_damped(psi, x, t):
     d2psi_dx2 = np.zeros_like(psi)
-    for i in range(1, len(x) - 1):  
-        d2psi_dx2[i] = (psi[i+1] - 2*psi[i] + psi[i-1]) / (h**2)
+    #for i in range(1, len(x) - 1):  
+    #    d2psi_dx2[i] = (psi[i+1] - 2*psi[i] + psi[i-1]) / (h**2)
+    d2psi_dx2[1:-2] = (psi[0:-3]+psi[2:-1]-2*psi[1:-2])/(h**2)
     
     kinetic_term = (- (hBar**2 / (2 * m)) * d2psi_dx2) * np.exp(-alpha * t) # The kinetic term of the full derivative
     potential_term = (0.5 * m * omega**2 * x**2 * psi) * np.exp(alpha * t) # The potential term of the full derivative
@@ -98,6 +100,8 @@ psi_undamped_euler = np.zeros_like(psi_eigenstates, np.complex128)
 psi_undamped_euler[:,0] = psi_eigenstates[:,0]
 psi_undamped_rk4 = psi_undamped_euler.copy()
 for i in range(M):
+    if i % 100 == 0:
+        print(i)
     psi_undamped_euler[0,i-1] = 0.0
     psi_undamped_euler[-1,i-1] = 0.0
     psi_undamped_rk4[0,i-1] = 0.0
@@ -117,12 +121,47 @@ print("Computing Damped Numerical Solution ...")
 psi_damped = np.zeros_like(psi_eigenstates, np.complex128)
 psi_damped[:,0] = psi_eigenstates[:,0]
 for i in range(1,M):
+    if i % 500 == 0:
+        print(i)
     psi_damped[0,i-1] = 0.0
     psi_damped[-1,i-1] = 0.0
     psi_damped[:,i] = runge_kutta_step(psi_damped[:,i-1], dpsi_dt_damped, t_vec[i], dt)
 P_damped = np.abs(psi_damped)**2
 x_bar_damped = expected_position(psi_damped)
     
+'''
+print("Saving Animation Frames")
+plt.plot(x_vec)
+plt.show(block=False)
+input()
+frame = 0
+for i in range(0,M,40):
+    print(i)
+    plt.cla()
+    plt.plot(x_vec,P_eigenstates[:,i],color="b",lw=1)
+    plt.xlabel("x (m)")
+    plt.ylabel("P(x)")
+    plt.title("Undamped Probability Density")
+    plt.xlim(-x_classical_turning_point*2,x_classical_turning_point*2)
+    plt.ylim(0,8e16)
+    plt.show(block=False)
+    plt.savefig("undamped/{}.png".format(frame))
+    plt.cla()
+    plt.plot(x_vec,P_damped[:,i],color="r",lw=1)
+    plt.xlabel("x (m)")
+    plt.ylabel("P(x)")
+    plt.title("Damped Probability Density")
+    plt.xlim(-x_classical_turning_point*1.0,x_classical_turning_point*1.0)
+    plt.ylim(0,4e17)
+    plt.show(block=False)
+    plt.savefig("Damped/{}.png".format(frame))
+    plt.plot(x_vec,P_eigenstates[:,i],color="b",lw=1)
+    plt.show(block=False)
+    plt.pause(0.2)
+    frame = frame + 1
+'''
+
 # solve time dependent equation for damped case
 
 # plot
+
