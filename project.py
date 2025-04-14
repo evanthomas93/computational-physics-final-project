@@ -8,8 +8,8 @@ omega = 1
 C_n = [1/np.sqrt(3), 1/np.sqrt(3), 1/np.sqrt(3)] # initial values of first three eigenstates
 average_n = (np.dot(C_n,np.arange(1,4)))/3.0 # average energy level, used to get classical turning point 
 N = 201
-M = 3000
-T = 3*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
+M = 10000
+T = 10*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
 x_classical_turning_point = np.sqrt((2*average_n+1)*(hBar/(m*omega)))
 x_max = x_classical_turning_point*5.0
 x_vec = np.linspace(-x_max, x_max, N)
@@ -22,16 +22,9 @@ def generate_initial_state():
     # get initial psi
     return psi
 
-<<<<<<< HEAD
-def euler_step(psi, dpsi_dt_function, dt):
-    pass
-
-def runge_kutta_step(psi, dpsi_dt_function, dt):
-=======
 def euler_step(psi, dpsi_dt_function, t, dt):
     return psi + dpsi_dt_function(psi, x_vec, t)*dt
 def runge_kutta_step(psi, dpsi_dt_function, t, dt):
->>>>>>> d48b21bcefd047ca2257fa23ecdeeaed80f21d5a
     k1 = dt * dpsi_dt_function(psi, x_vec, t)
     k2 = dt * dpsi_dt_function((psi + (0.5 * k1)), x_vec, (t + (0.5 * dt)))
     k3 = dt * dpsi_dt_function((psi + (0.5 * k2)), x_vec, (t + (0.5 * dt)))
@@ -132,4 +125,53 @@ x_bar_damped = expected_position(psi_damped)
     
 # solve time dependent equation for damped case
 
-# plot
+# plot:
+
+# plotting the exact, Euler and RK4 methods for the undamped case:
+# First, we plot the probability densities, |ψ(x)|², versus time using the three mathematical methods
+plt.figure(figsize = (16, 5))
+timeIndecies = [0, M//3, 2 * M//3, M - 1] # We choose four indecies, but could we chose more...?
+
+for i, idx in enumerate(timeIndecies):
+    plt.subplot(1, 4, i + 1)
+    plt.plot(x_vec, P_eigenstates[:, idx], color = '#001f3f', label = 'Exact') # Plotting Exact
+    plt.plot(x_vec, P_undamped_euler[:, idx], color = '#CFB53B', label = 'Euler') # Plotting Euler
+    plt.plot(x_vec, P_undamped_rk4[:, idx], color = '#DCDCDC', label = "RK4") # Plotting RK4
+
+    plt.title(f'Time = {t_vec[idx]:.2e} s')
+    plt.xlabel('x')
+    plt.ylabel('|ψ(x)|²')
+    plt.grid(True)
+    if i == 0:
+        plt.legend()
+    
+plt.tight_layout()
+plt.suptitle('Undamped Harmonic Oscillator: |ψ(x)|² at Different Times', y = 1.05)
+plt.show()
+plt.savefig('probDensitiesVsPos')
+
+# Then, we plot the expected position, <x>, versus time using the three mathematical methods
+plt.figure(figsize = (10, 5))
+plt.plot(t_vec, x_bar_eigenstates, color = '#001f3f', label = 'Exact') # Plotting Exact
+plt.plot(t_vec, x_bar_undamped_euler, color = '#CFB53B', label = 'Euler') # Plotting Euler
+plt.plot(t_vec, x_bar_undamped_rk4, color = '#DCDCDC', label = "RK4" ) # Plotting RK4
+
+plt.xlabel('Time (s)')
+plt.ylabel(r'$\langle x  \rangle$')
+plt.suptitle('Undamped Harmonic Oscillator: <x> at Different Times')
+plt.legend()
+plt.grid(True)
+plt.show()
+plt.savefig('expectedPosVsTime')
+
+# Then we plot the RMS error versus time for the Euler's method and RK4 Method
+plt.figure(figsize = (10, 6))
+plt.plot(t_vec, error_undamped_euler, color = '#CFB53B', label = 'Euler RMS Error') # Plotting Euler RMS Error
+plt.plot(t_vec, error_undamped_rk4, color = '#DCDCDC', label = 'Euler RMS Error') # Plotting Euler RMS Error
+plt.xlabel('Time (s)')
+plt.ylabel('RMS Error')
+plt.suptitle('Undamped Harmonic Oscillator: RMS Errors at Different Times')
+plt.yscale('log')
+plt.legend()
+plt.grid(True)
+plt.savefig('rmsErrorVsTime')
