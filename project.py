@@ -34,9 +34,55 @@ def runge_kutta_step(psi, dpsi_dt_function, t, dt):
 
     return psi_next
 
-def crank_nicholson_step(psi, dpsi_dt_function, dt):
-    pass
-    # might need a separate version for damped and undamped
+#crank nicholson
+def construct_hamiltonian(N, h, m, omega, hBar, x_vec):
+    
+    #kinetic energy operator approximated by finite difference using a tridiagonal matrix
+    kinetic_main = -2.0 * np.ones(N)
+    kinetic_off = 1.0 * np.ones(N - 1)
+    kinetic = diags([kinetic_off, kinetic_main, kinetic_off], [-1, 0, 1]) / (h ** 2)
+    kinetic *= -(hBar ** 2) / (2 * m)
+
+    #v(x) as a diagonal matrix
+    potential = 0.5 * m * omega**2 * x_vec**2
+    potential_matrix = diags(potential, 0)
+    
+    #final hamiltonian/ total energy operator for TDSE
+    H = kinetic + potential_matrix
+    return H.tocsc()  
+    #sparse column format for solving
+
+def crank_nicholson_step(psi_n, H, dt, hBar):
+    I = diags([1.0] * len(psi_n), 0, format='csc')
+    #A is left hand side matrix
+    A = I + (1j * dt / (2 * hBar)) * H
+    B = I - (1j * dt / (2 * hBar)) * H
+    #right hand side vector
+    rhs = B @ psi_n
+    psi_np1 = spsolve(A, rhs)
+    return psi_np1
+
+print("Computing Crank-Nicholson Solution ...")
+H = construct_hamiltonian(N, h, m, omega, hBar, x_vec)
+
+#storing over all time steps
+psi_crank = np.zeros_like(psi_eigenstates, dtype=np.complex128)
+psi_crank[:, 0] = psi_eigenstates[:, 0]
+
+#boundary conditions set to 0
+for i in range(1, M):
+    psi_crank[0, i-1] = 0.0
+    psi_crank[-1, i-1] = 0.0
+    psi_next = crank_nicholson_step(psi_crank[:, i-1], H, dt, hBar)
+    psi_next[0] = 0.0
+    psi_next[-1] = 0.0
+    psi_crank[:, i] = psi_next
+
+P_crank = np.abs(psi_crank)**2
+error_undamped_crank = rms_error(P_eigenstates, P_crank)
+x_bar_crank = expected_position(psi_crank)
+
+#end of crank nicholson
 
 def dpsi_dt_undamped(psi, x, t):
     # Second derivative of the wavefunction psi
