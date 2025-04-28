@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.sparse import diags
+from scipy.sparse.linalg import spsolve
 
 # store psi as Nx1 array, full solution stored as NxM (N positions, M timesteps)
 m = 1
@@ -8,10 +10,10 @@ omega = 1
 C_n = [1/np.sqrt(3), 1/np.sqrt(3), 1/np.sqrt(3)] # initial values of first three eigenstates
 average_n = (np.dot(C_n,np.arange(1,4)))/3.0 # average energy level, used to get classical turning point 
 N = 201
-M = 10000
-T = 10*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
+M = 3000
+T = 3*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
 x_classical_turning_point = np.sqrt((2*average_n+1)*(hBar/(m*omega)))
-x_max = x_classical_turning_point*3.0
+x_max = x_classical_turning_point*5.0
 x_vec = np.linspace(-x_max, x_max, N)
 t_vec = np.linspace(0,T,M)
 dt = t_vec[1]-t_vec[0]
@@ -34,9 +36,35 @@ def runge_kutta_step(psi, dpsi_dt_function, t, dt):
 
     return psi_next
 
-def crank_nicholson_step(psi, dpsi_dt_function, dt):
-    pass
-    # might need a separate version for damped and undamped
+#crank nicholson
+def construct_hamiltonian(N, h, m, omega, hBar, x_vec):
+    
+    #kinetic energy operator approximated by finite difference using a tridiagonal matrix
+    kinetic_main = -2.0 * np.ones(N)
+    kinetic_off = 1.0 * np.ones(N - 1)
+    kinetic = diags([kinetic_off, kinetic_main, kinetic_off], [-1, 0, 1]) / (h ** 2)
+    kinetic *= -(hBar ** 2) / (2 * m)
+
+    #v(x) as a diagonal matrix
+    potential = 0.5 * m * omega**2 * x_vec**2
+    potential_matrix = diags(potential, 0)
+    
+    #final hamiltonian/ total energy operator for TDSE
+    H = kinetic + potential_matrix
+    return H.tocsc()  
+    #sparse column format for solving
+
+def crank_nicholson_step(psi_n, H, dt, hBar):
+    I = diags([1.0] * len(psi_n), 0, format='csc')
+    #A is left hand side matrix
+    A = I + (1j * dt / (2 * hBar)) * H
+    B = I - (1j * dt / (2 * hBar)) * H
+    #right hand side vector
+    rhs = B @ psi_n
+    psi_np1 = spsolve(A, rhs)
+    return psi_np1
+
+#end of crank nicholson
 
 def dpsi_dt_undamped(psi, x, t):
     # Second derivative of the wavefunction psi
@@ -99,7 +127,7 @@ print("Computing Undamped Numerical Solutions ...")
 psi_undamped_euler = np.zeros_like(psi_eigenstates, np.complex128)
 psi_undamped_euler[:,0] = psi_eigenstates[:,0]
 psi_undamped_rk4 = psi_undamped_euler.copy()
-for i in range(M):
+for i in range(1,M):
     if i % 100 == 0:
         print(i)
     psi_undamped_euler[0,i-1] = 0.0
@@ -116,6 +144,28 @@ error_undamped_rk4 = rms_error(P_eigenstates, P_undamped_rk4)
 x_bar_eigenstates = expected_position(psi_eigenstates)
 x_bar_undamped_euler = expected_position(psi_undamped_euler)
 x_bar_undamped_rk4 = expected_position(psi_undamped_rk4)
+
+print("Computing Crank-Nicholson Solution ...")
+H = construct_hamiltonian(N, h, m, omega, hBar, x_vec)
+
+#storing over all time steps
+psi_crank = np.zeros_like(psi_eigenstates, dtype=np.complex128)
+psi_crank[:, 0] = psi_eigenstates[:, 0]
+
+#boundary conditions set to 0
+for i in range(1, M):
+    if i % 100 == 0:
+        print(i)
+    psi_crank[0, i-1] = 0.0
+    psi_crank[-1, i-1] = 0.0
+    psi_next = crank_nicholson_step(psi_crank[:, i-1], H, dt, hBar)
+    psi_next[0] = 0.0
+    psi_next[-1] = 0.0
+    psi_crank[:, i] = psi_next
+
+P_crank = np.abs(psi_crank)**2
+error_undamped_crank = rms_error(P_eigenstates, P_crank)
+x_bar_crank = expected_position(psi_crank)
 
 print("Computing Damped Numerical Solution ...")
 psi_damped = np.zeros_like(psi_eigenstates, np.complex128)
@@ -163,5 +213,66 @@ for i in range(0,M,40):
 
 # solve time dependent equation for damped case
 
-# plot
+# plot:
 
+# plotting the exact, Euler and RK4 methods for the undamped case:
+# First, we plot the probability densities, |ψ(x)|², versus time using the three mathematical methods
+plt.figure(figsize = (16, 5))
+timeIndecies = [0, 100, 200, 300] # We choose four indecies, but could we chose more...?
+
+for i, idx in enumerate(timeIndecies):
+    plt.subplot(1, 4, i + 1)
+    plt.plot(x_vec, P_eigenstates[:, idx], color = 'k', label = 'Exact') # Plotting Exact
+    plt.plot(x_vec, P_undamped_euler[:, idx], color = 'g', label = 'Euler') # Plotting Euler
+    plt.plot(x_vec, P_undamped_rk4[:, idx], color = 'b', label = "RK4") # Plotting RK4
+    plt.plot(x_vec, P_crank[:,idx], color = "r", label = "Crank-Nicolson")
+
+    plt.title(f'Time = {t_vec[idx]:.2e} s')
+    plt.xlabel('x')
+    plt.ylabel('|ψ(x)|²')
+    plt.ylim(0,8e16)
+    plt.grid(True)
+    if i == 0:
+        plt.legend()
+    
+plt.tight_layout()
+plt.suptitle('Undamped Harmonic Oscillator: |ψ(x)|² at Different Times', y = 1.05)
+plt.show()
+
+# Then, we plot the expected position, <x>, versus time using the three mathematical methods
+plt.figure(figsize = (10, 5))
+plt.plot(t_vec, x_bar_eigenstates, color = 'k', label = 'Exact') # Plotting Exact
+plt.plot(t_vec, x_bar_undamped_euler, color = 'g', label = 'Euler') # Plotting Euler
+plt.plot(t_vec, x_bar_undamped_rk4, color = 'b', label = "RK4" ) # Plotting RK4
+plt.plot(t_vec, x_bar_crank, color = 'r', label = "Crank-Nicolson")
+
+plt.xlabel('Time (s)')
+plt.ylabel(r'$\langle x  \rangle$')
+plt.suptitle('Undamped Harmonic Oscillator: <x> at Different Times')
+plt.legend()
+plt.grid(True)
+plt.ylim(-2e-17, 2e-17)
+plt.show()
+
+# Then we plot the RMS error versus time for the Euler's method and RK4 Method
+plt.figure(figsize = (10, 6))
+plt.plot(t_vec, error_undamped_euler, color = 'g', label = 'Euler RMS Error') # Plotting Euler RMS Error
+plt.plot(t_vec, error_undamped_rk4, color = 'b', label = 'RK4 RMS Error') # Plotting Euler RMS Error
+plt.plot(t_vec, error_undamped_crank, color = 'r', label = "Crank-Nicolson RMS Error")
+plt.xlabel('Time (s)')
+plt.ylabel('RMS Error')
+plt.suptitle('Undamped Harmonic Oscillator: RMS Errors at Different Times')
+#plt.yscale('log')
+plt.legend()
+plt.grid(True)
+plt.ylim(0,6e15)
+plt.show()
+
+plt.figure(figsize = (10,5))
+plt.plot(t_vec, x_bar_damped, color="k")
+plt.xlabel("Time (s)")
+plt.ylabel(r'$\langle x  \rangle$')
+plt.suptitle('Damped Harmonic Oscillator: <x> at Different Times')
+plt.grid(True)
+plt.ylim(-2e-17, 2e-17)
+plt.show()
