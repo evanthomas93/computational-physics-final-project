@@ -2,27 +2,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
+import time
 
 # store psi as Nx1 array, full solution stored as NxM (N positions, M timesteps)
-m = 1
+m = 1.67e-27
 hBar = 1.055e-34 # Reduced Planck's Constant in J * s
-omega = 1
+omega = 1.096e14*(2*np.pi)
 C_n = [1/np.sqrt(3), 1/np.sqrt(3), 1/np.sqrt(3)] # initial values of first three eigenstates
 average_n = (np.dot(C_n,np.arange(1,4)))/3.0 # average energy level, used to get classical turning point 
-N = 201
-M = 3000
-T = 3*2*np.pi/omega # run for 10 times the period of the harmonic oscillator
+N = 301
+M = 20000
+period = 2*np.pi/omega
+T = 10*period # run for 10 times the period of the harmonic oscillator
 x_classical_turning_point = np.sqrt((2*average_n+1)*(hBar/(m*omega)))
 x_max = x_classical_turning_point*5.0
 x_vec = np.linspace(-x_max, x_max, N)
 t_vec = np.linspace(0,T,M)
 dt = t_vec[1]-t_vec[0]
 h =(2*x_max)/(N-1)
-alpha = 0.1
+logarithmic_decrement = 0.2
+alpha = logarithmic_decrement/period
 
-def generate_initial_state():
-    # get initial psi
-    return psi
+print(dt,h,T,x_max*2)
 
 def euler_step(psi, dpsi_dt_function, t, dt):
     return psi + dpsi_dt_function(psi, x_vec, t)*dt
@@ -94,7 +95,7 @@ def rms_error(P1, P2):
     error = np.zeros(M)
     Delta_P = P1 - P2
     for i in range(M):
-        error[i] = np.sqrt(np.sum( (Delta_P[:,i])**2 ))
+        error[i] = np.sqrt(np.sum( (Delta_P[:,i])**2 )/np.size(Delta_P))
     return error
 
 def expected_position(psi):
@@ -127,15 +128,20 @@ print("Computing Undamped Numerical Solutions ...")
 psi_undamped_euler = np.zeros_like(psi_eigenstates, np.complex128)
 psi_undamped_euler[:,0] = psi_eigenstates[:,0]
 psi_undamped_rk4 = psi_undamped_euler.copy()
+t0 = time.time()
 for i in range(1,M):
-    if i % 100 == 0:
-        print(i)
+    #if i % 100 == 0:
+    #    print(i)
     psi_undamped_euler[0,i-1] = 0.0
     psi_undamped_euler[-1,i-1] = 0.0
-    psi_undamped_rk4[0,i-1] = 0.0
-    psi_undamped_rk4[-1,i-1] = 0.0
     psi_undamped_euler[:,i] = euler_step(psi_undamped_euler[:,i-1], dpsi_dt_undamped, t_vec[i], dt)
-    psi_undamped_rk4[:,i] = runge_kutta_step(psi_undamped_rk4[:,i-1], dpsi_dt_undamped, t_vec[i], dt)
+print("Euler runtime: ",time.time()-t0)
+t0 = time.time();
+for i in range(1,M):
+	psi_undamped_rk4[0,i-1] = 0.0
+	psi_undamped_rk4[-1,i-1] = 0.0
+	psi_undamped_rk4[:,i] = runge_kutta_step(psi_undamped_rk4[:,i-1], dpsi_dt_undamped, t_vec[i], dt)
+print("rk4 runtime: ", time.time()-t0);
 P_eigenstates = np.abs(psi_eigenstates)**2
 P_undamped_euler = np.abs(psi_undamped_euler)**2
 P_undamped_rk4 = np.abs(psi_undamped_rk4)**2
@@ -153,15 +159,17 @@ psi_crank = np.zeros_like(psi_eigenstates, dtype=np.complex128)
 psi_crank[:, 0] = psi_eigenstates[:, 0]
 
 #boundary conditions set to 0
+t0 = time.time()
 for i in range(1, M):
-    if i % 100 == 0:
-        print(i)
+    #if i % 100 == 0:
+    #    print(i)
     psi_crank[0, i-1] = 0.0
     psi_crank[-1, i-1] = 0.0
     psi_next = crank_nicholson_step(psi_crank[:, i-1], H, dt, hBar)
     psi_next[0] = 0.0
     psi_next[-1] = 0.0
     psi_crank[:, i] = psi_next
+print("Crank-Nicolson run time: ", time.time()-t0);
 
 P_crank = np.abs(psi_crank)**2
 error_undamped_crank = rms_error(P_eigenstates, P_crank)
@@ -171,43 +179,60 @@ print("Computing Damped Numerical Solution ...")
 psi_damped = np.zeros_like(psi_eigenstates, np.complex128)
 psi_damped[:,0] = psi_eigenstates[:,0]
 for i in range(1,M):
-    if i % 500 == 0:
-        print(i)
+    #if i % 500 == 0:
+    #    print(i)
     psi_damped[0,i-1] = 0.0
     psi_damped[-1,i-1] = 0.0
     psi_damped[:,i] = runge_kutta_step(psi_damped[:,i-1], dpsi_dt_damped, t_vec[i], dt)
 P_damped = np.abs(psi_damped)**2
 x_bar_damped = expected_position(psi_damped)
+
+t_last = 0.0
+x_last = x_bar_damped[0]
+w_d = 0.0
+l_d = 0.0
+count = 0
+for i in range(1,M-1):
+	if x_bar_damped[i] > x_bar_damped[i-1] and x_bar_damped[i] > x_bar_damped[i+1]:
+		count = count + 1;
+		w_d += np.pi*2/(t_vec[i]-t_last)
+		l_d += np.log(x_last**2/x_bar_damped[i]**2)
+		t_last = t_vec[i]
+		x_last = x_bar_damped[i]
+w_d /= count
+l_d /= count
+print("FREQUENCY: ",w_d," DECREMENT: ",l_d);
+
     
 '''
 print("Saving Animation Frames")
 plt.plot(x_vec)
 plt.show(block=False)
-input()
 frame = 0
 for i in range(0,M,40):
     print(i)
     plt.cla()
-    plt.plot(x_vec,P_eigenstates[:,i],color="b",lw=1)
+    plt.plot(x_vec,P_eigenstates[:,i],color="k",lw=1)
+    plt.plot(x_vec,P_undamped_rk4[:,i],color="r",lw=1)
     plt.xlabel("x (m)")
     plt.ylabel("P(x)")
     plt.title("Undamped Probability Density")
     plt.xlim(-x_classical_turning_point*2,x_classical_turning_point*2)
-    plt.ylim(0,8e16)
+    #plt.ylim(np.max(P_eigenstates)*1.1)
     plt.show(block=False)
-    plt.savefig("undamped/{}.png".format(frame))
-    plt.cla()
-    plt.plot(x_vec,P_damped[:,i],color="r",lw=1)
-    plt.xlabel("x (m)")
-    plt.ylabel("P(x)")
-    plt.title("Damped Probability Density")
-    plt.xlim(-x_classical_turning_point*1.0,x_classical_turning_point*1.0)
-    plt.ylim(0,4e17)
-    plt.show(block=False)
-    plt.savefig("Damped/{}.png".format(frame))
-    plt.plot(x_vec,P_eigenstates[:,i],color="b",lw=1)
-    plt.show(block=False)
-    plt.pause(0.2)
+    #plt.savefig("undamped/{}.png".format(frame))
+    #plt.cla()
+    #plt.plot(x_vec,P_damped[:,i],color="r",lw=1)
+    #plt.xlabel("x (m)")
+    #plt.ylabel("P(x)")
+    #plt.title("Damped Probability Density")
+    #plt.xlim(-x_classical_turning_point*1.0,x_classical_turning_point*1.0)
+    #plt.ylim(0,4e17)
+    #plt.show(block=False)
+    #plt.savefig("Damped/{}.png".format(frame))
+    #plt.plot(x_vec,P_eigenstates[:,i],color="b",lw=1)
+    #plt.show(block=False)
+    plt.pause(0.5)
     frame = frame + 1
 '''
 
@@ -217,11 +242,11 @@ for i in range(0,M,40):
 
 # plotting the exact, Euler and RK4 methods for the undamped case:
 # First, we plot the probability densities, |ψ(x)|², versus time using the three mathematical methods
-plt.figure(figsize = (16, 5))
-timeIndecies = [0, 100, 200, 300] # We choose four indecies, but could we chose more...?
+plt.figure(figsize = (12, 8))
+timeIndecies = [0, 3333*2, 6666*2, 9999*2] # We choose four indecies, but could we chose more...?
 
 for i, idx in enumerate(timeIndecies):
-    plt.subplot(1, 4, i + 1)
+    plt.subplot(2, 2, i + 1)
     plt.plot(x_vec, P_eigenstates[:, idx], color = 'k', label = 'Exact') # Plotting Exact
     plt.plot(x_vec, P_undamped_euler[:, idx], color = 'g', label = 'Euler') # Plotting Euler
     plt.plot(x_vec, P_undamped_rk4[:, idx], color = 'b', label = "RK4") # Plotting RK4
@@ -230,7 +255,8 @@ for i, idx in enumerate(timeIndecies):
     plt.title(f'Time = {t_vec[idx]:.2e} s')
     plt.xlabel('x')
     plt.ylabel('|ψ(x)|²')
-    plt.ylim(0,8e16)
+    plt.xlim(-2.5*x_classical_turning_point, 2.5*x_classical_turning_point);
+    plt.ylim(0,np.max(P_eigenstates)*1.05)
     plt.grid(True)
     if i == 0:
         plt.legend()
@@ -240,7 +266,7 @@ plt.suptitle('Undamped Harmonic Oscillator: |ψ(x)|² at Different Times', y = 1
 plt.show()
 
 # Then, we plot the expected position, <x>, versus time using the three mathematical methods
-plt.figure(figsize = (10, 5))
+plt.figure(figsize = (10, 6))
 plt.plot(t_vec, x_bar_eigenstates, color = 'k', label = 'Exact') # Plotting Exact
 plt.plot(t_vec, x_bar_undamped_euler, color = 'g', label = 'Euler') # Plotting Euler
 plt.plot(t_vec, x_bar_undamped_rk4, color = 'b', label = "RK4" ) # Plotting RK4
@@ -251,7 +277,7 @@ plt.ylabel(r'$\langle x  \rangle$')
 plt.suptitle('Undamped Harmonic Oscillator: <x> at Different Times')
 plt.legend()
 plt.grid(True)
-plt.ylim(-2e-17, 2e-17)
+plt.ylim(np.min(x_bar_eigenstates)*1.1,np.max(x_bar_eigenstates)*1.1);
 plt.show()
 
 # Then we plot the RMS error versus time for the Euler's method and RK4 Method
@@ -265,14 +291,33 @@ plt.suptitle('Undamped Harmonic Oscillator: RMS Errors at Different Times')
 #plt.yscale('log')
 plt.legend()
 plt.grid(True)
-plt.ylim(0,6e15)
+plt.ylim(0,np.max(error_undamped_crank)*1.1)
 plt.show()
 
+# damped position
 plt.figure(figsize = (10,5))
 plt.plot(t_vec, x_bar_damped, color="k")
 plt.xlabel("Time (s)")
 plt.ylabel(r'$\langle x  \rangle$')
 plt.suptitle('Damped Harmonic Oscillator: <x> at Different Times')
 plt.grid(True)
-plt.ylim(-2e-17, 2e-17)
+plt.ylim(np.min(x_bar_damped)*1.1, np.max(x_bar_damped)*1.1)
+plt.show()
+
+# damped probability
+plt.figure(figsize = (12, 8))
+for i, idx in enumerate(timeIndecies):
+    plt.subplot(2, 2, i + 1)
+    plt.plot(x_vec, P_damped[:,idx], color = "k", label = "Crank-Nicolson")
+
+    plt.title(f'Time = {t_vec[idx]:.2e} s')
+    plt.xlabel('x')
+    plt.ylabel('|ψ(x)|²')
+    plt.xlim(-2.5*x_classical_turning_point, 2.5*x_classical_turning_point);
+    plt.ylim(0,np.max(P_damped)*1.05)
+    plt.grid(True)
+    if i == 0:
+        plt.legend()
+plt.tight_layout()
+plt.suptitle('Damped Harmonic Oscillator: |ψ(x)|² at Different Times', y = 1.05)
 plt.show()
